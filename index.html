@@ -67,6 +67,8 @@
     <label class="ctrl"><input type="checkbox" id="show-labels"> Ticket Number</label>
     <div class="sep"></div>
     <label class="ctrl"><input type="checkbox" id="show-map" checked> Map</label>
+    <div class="sep"></div>
+    <button id="btn-fullscreen">⛶ Fullscreen</button>
   </div>
 
   <div id="map"></div>
@@ -144,6 +146,18 @@
     document.getElementById('show-map').addEventListener('change', e => {
       if (e.target.checked) map.addLayer(tileLayer);
       else map.removeLayer(tileLayer);
+    });
+
+    const btnFullscreen = document.getElementById('btn-fullscreen');
+    btnFullscreen.addEventListener('click', async () => {
+      try {
+        if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
+        else await document.exitFullscreen();
+      } catch (e) { console.error('Fullscreen error:', e); }
+    });
+    document.addEventListener('fullscreenchange', () => {
+      btnFullscreen.textContent = document.fullscreenElement ? '⛶ Exit fullscreen' : '⛶ Fullscreen';
+      setTimeout(() => map.invalidateSize(), 100);
     });
 
     fetch('locations.json')
