@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>100 Locations</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; font-family: 'Courier New', monospace; }
+    #map { width: 100vw; height: 100vh; background: #000; }
+    #loading {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 1.4rem; background: #000; z-index: 2000;
+    }
+    #panel {
+      position: fixed; top: 0; left: 0; right: 0;
+      background: rgba(0, 0, 0, 0.78);
+      backdrop-filter: blur(6px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 8px 16px;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+      color: #ccc; font-size: 12px; z-index: 1000;
+      user-select: none;
+    }
+    .sep { width: 1px; height: 22px; background: rgba(255, 255, 255, 0.18); flex-shrink: 0; }
+    .ctrl { display: flex; align-items: center; gap: 7px; }
+    button {
+      background: rgba(255, 255, 255, 0.09);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      color: #ccc; padding: 4px 13px; border-radius: 3px;
+      cursor: pointer; font-size: 12px; font-family: inherit; white-space: nowrap;
+      transition: background 0.12s;
+    }
+    button:hover { background: rgba(255, 255, 255, 0.18); }
+    input[type=range] { width: 82px; accent-color: #bbb; cursor: pointer; }
+    input[type=checkbox] { cursor: pointer; accent-color: #bbb; }
+    .val { color: #999; min-width: 22px; text-align: right; }
+    .id-label {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      color: #fff;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      font-weight: bold;
+      text-shadow: 0 0 4px #000, 0 0 4px #000, 0 0 4px #000;
+      padding: 0 !important;
+      white-space: nowrap;
+    }
+    .id-label::before { display: none !important; }
+  </style>
+</head>
+<body>
+  <div id="loading">Loading locations.json…</div>
+
+  <div id="panel">
+    <div class="ctrl">
+      <span>Radius</span>
+      <input type="range" id="radius-slider" min="2" max="30" value="6">
+      <span class="val" id="radius-val">6</span><span>px</span>
+    </div>
+    <div class="sep"></div>
+    <button id="btn-randomize">Randomize colors</button>
+    <div class="sep"></div>
+    <label class="ctrl"><input type="checkbox" id="show-labels"> Show labels</label>
+    <div class="sep"></div>
+    <label class="ctrl"><input type="checkbox" id="show-map" checked> Map</label>
+  </div>
+
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const loadingEl = document.getElementById('loading');
+
+    const map = L.map('map', { zoomControl: false });
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    const tileLayer = L.tileLayer(
+      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        subdomains: 'abcd',
+        maxZoom: 19
+      }
+    ).addTo(map);
+
+    let locations = [];
+    let markers = [];
+    let dotColors = [];
+    let dotRadius = 6;
+    let showLabels = false;
+
+    function randomColor() {
+      return `hsl(${Math.random() * 360 | 0},${60 + (Math.random() * 40 | 0)}%,${50 + (Math.random() * 30 | 0)}%)`;
+    }
+
+    function createMarkers() {
+      markers.forEach(m => map.removeLayer(m));
+      markers = locations.map((loc, i) =>
+        L.circleMarker([loc.lat, loc.lng], {
+          radius: dotRadius,
+          fillColor: dotColors[i],
+          color: dotColors[i],
+          fillOpacity: 1,
+          weight: 0
+        }).addTo(map)
+      );
+    }
+
+    function applyLabels() {
+      markers.forEach((m, i) => {
+        m.unbindTooltip();
+        if (showLabels) {
+          m.bindTooltip(locations[i].id, {
+            permanent: true,
+            direction: 'right',
+            className: 'id-label',
+            offset: [8, 0]
+          }).openTooltip();
+        }
+      });
+    }
+
+    const radiusSlider = document.getElementById('radius-slider');
+    const radiusVal    = document.getElementById('radius-val');
+    radiusSlider.addEventListener('input', () => {
+      dotRadius = +radiusSlider.value;
+      radiusVal.textContent = dotRadius;
+      markers.forEach(m => m.setRadius(dotRadius));
+    });
+
+    document.getElementById('btn-randomize').addEventListener('click', () => {
+      dotColors = locations.map(() => randomColor());
+      markers.forEach((m, i) => m.setStyle({ fillColor: dotColors[i], color: dotColors[i] }));
+    });
+
+    document.getElementById('show-labels').addEventListener('change', e => {
+      showLabels = e.target.checked;
+      applyLabels();
+    });
+
+    document.getElementById('show-map').addEventListener('change', e => {
+      if (e.target.checked) map.addLayer(tileLayer);
+      else map.removeLayer(tileLayer);
+    });
+
+    fetch('locations.json')
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then(data => {
+        locations = data;
+        dotColors = locations.map(() => randomColor());
+        createMarkers();
+        map.fitBounds(
+          L.latLngBounds(locations.map(l => [l.lat, l.lng])),
+          { padding: [40, 40] }
+        );
+        loadingEl.style.display = 'none';
+      })
+      .catch(err => {
+        loadingEl.textContent = `Failed to load locations.json — ${err.message}`;
+      });
+  </script>
+</body>
+</html>
