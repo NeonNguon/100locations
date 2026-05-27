@@ -7,49 +7,79 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #000; overflow: hidden; font-family: 'Courier New', monospace; }
-    #map { width: 100vw; height: 100vh; background: #000; }
+
+    /* ── Light theme (default) ── */
+    body {
+      background: #fff;
+      overflow: hidden;
+      font-family: 'Courier New', monospace;
+    }
+    #map { width: 100vw; height: 100vh; background: #fff; }
     #loading {
       position: fixed; inset: 0;
       display: flex; align-items: center; justify-content: center;
-      color: #fff; font-size: 1.4rem; background: #000; z-index: 2000;
+      color: #222; font-size: 1.4rem; background: #fff; z-index: 2000;
     }
     #panel {
       position: fixed; top: 0; left: 0; right: 0;
-      background: rgba(0, 0, 0, 0.78);
+      background: rgba(255, 255, 255, 0.88);
       backdrop-filter: blur(6px);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      border-bottom: 1px solid #ccc;
       padding: 8px 16px;
       display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
-      color: #ccc; font-size: 12px; z-index: 1000;
+      color: #222; font-size: 12px; z-index: 1000;
       user-select: none;
     }
-    .sep { width: 1px; height: 22px; background: rgba(255, 255, 255, 0.18); flex-shrink: 0; }
+    .sep { width: 1px; height: 22px; background: rgba(0, 0, 0, 0.15); flex-shrink: 0; }
     .ctrl { display: flex; align-items: center; gap: 7px; }
     button {
-      background: rgba(255, 255, 255, 0.09);
-      border: 1px solid rgba(255, 255, 255, 0.22);
-      color: #ccc; padding: 4px 13px; border-radius: 3px;
+      background: rgba(0, 0, 0, 0.06);
+      border: 1px solid rgba(0, 0, 0, 0.2);
+      color: #333; padding: 4px 13px; border-radius: 3px;
       cursor: pointer; font-size: 12px; font-family: inherit; white-space: nowrap;
       transition: background 0.12s;
     }
-    button:hover { background: rgba(255, 255, 255, 0.18); }
-    input[type=range] { width: 82px; accent-color: #bbb; cursor: pointer; }
-    input[type=checkbox] { cursor: pointer; accent-color: #bbb; }
-    .val { color: #999; min-width: 22px; text-align: right; }
+    button:hover { background: rgba(0, 0, 0, 0.12); }
+    input[type=range] { width: 82px; accent-color: #555; cursor: pointer; }
+    input[type=checkbox] { cursor: pointer; accent-color: #555; }
+    .val { color: #666; min-width: 22px; text-align: right; }
     .id-label {
       background: transparent !important;
       border: none !important;
       box-shadow: none !important;
-      color: #fff;
+      color: #111;
       font-family: 'Courier New', monospace;
       font-size: 11px;
       font-weight: bold;
-      text-shadow: 0 0 4px #000, 0 0 4px #000, 0 0 4px #000;
+      text-shadow: 0 0 3px #fff, 0 0 3px #fff;
       padding: 0 !important;
       white-space: nowrap;
     }
     .id-label::before { display: none !important; }
+
+    /* ── Dark theme ── */
+    body.dark-theme { background: #000; }
+    body.dark-theme #map { background: #000; }
+    body.dark-theme #loading { background: #000; color: #fff; }
+    body.dark-theme #panel {
+      background: rgba(0, 0, 0, 0.78);
+      border-bottom-color: rgba(255, 255, 255, 0.1);
+      color: #ccc;
+    }
+    body.dark-theme .sep { background: rgba(255, 255, 255, 0.18); }
+    body.dark-theme button {
+      background: rgba(255, 255, 255, 0.09);
+      border-color: rgba(255, 255, 255, 0.22);
+      color: #ccc;
+    }
+    body.dark-theme button:hover { background: rgba(255, 255, 255, 0.18); }
+    body.dark-theme input[type=range] { accent-color: #bbb; }
+    body.dark-theme input[type=checkbox] { accent-color: #bbb; }
+    body.dark-theme .val { color: #999; }
+    body.dark-theme .id-label {
+      color: #fff;
+      text-shadow: 0 0 4px #000, 0 0 4px #000, 0 0 4px #000;
+    }
   </style>
 </head>
 <body>
@@ -68,6 +98,8 @@
     <div class="sep"></div>
     <label class="ctrl"><input type="checkbox" id="show-map" checked> Map</label>
     <div class="sep"></div>
+    <label class="ctrl"><input type="checkbox" id="dark-mode"> Dark mode</label>
+    <div class="sep"></div>
     <button id="btn-fullscreen">⛶ Fullscreen</button>
   </div>
 
@@ -79,14 +111,19 @@
 
     const map = L.map('map', { zoomControl: false });
     L.control.zoom({ position: 'bottomright' }).addTo(map);
-    const tileLayer = L.tileLayer(
+
+    const lightTiles = L.tileLayer(
+      'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+      { attribution: '&copy; OpenStreetMap contributors &copy; CARTO', subdomains: 'abcd', maxZoom: 19 }
+    );
+    const darkTiles = L.tileLayer(
       'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-      {
-        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-        subdomains: 'abcd',
-        maxZoom: 19
-      }
-    ).addTo(map);
+      { attribution: '&copy; OpenStreetMap contributors &copy; CARTO', subdomains: 'abcd', maxZoom: 19 }
+    );
+
+    let currentTiles = lightTiles;
+    let mapVisible = true;
+    currentTiles.addTo(map);
 
     let locations = [];
     let markers = [];
@@ -125,6 +162,7 @@
       });
     }
 
+    // Radius
     const radiusSlider = document.getElementById('radius-slider');
     const radiusVal    = document.getElementById('radius-val');
     radiusSlider.addEventListener('input', () => {
@@ -133,21 +171,38 @@
       markers.forEach(m => m.setRadius(dotRadius));
     });
 
+    // Randomize
     document.getElementById('btn-randomize').addEventListener('click', () => {
       dotColors = locations.map(() => randomColor());
       markers.forEach((m, i) => m.setStyle({ fillColor: dotColors[i], color: dotColors[i] }));
     });
 
+    // Ticket Number labels
     document.getElementById('show-labels').addEventListener('change', e => {
       showLabels = e.target.checked;
       applyLabels();
     });
 
+    // Map on/off — uses whichever tile layer is currently active
     document.getElementById('show-map').addEventListener('change', e => {
-      if (e.target.checked) map.addLayer(tileLayer);
-      else map.removeLayer(tileLayer);
+      mapVisible = e.target.checked;
+      if (mapVisible) map.addLayer(currentTiles);
+      else map.removeLayer(currentTiles);
     });
 
+    // Dark mode toggle
+    document.getElementById('dark-mode').addEventListener('change', e => {
+      const isDark = e.target.checked;
+      const nextTiles = isDark ? darkTiles : lightTiles;
+      if (mapVisible) {
+        map.removeLayer(currentTiles);
+        map.addLayer(nextTiles);
+      }
+      currentTiles = nextTiles;
+      document.body.classList.toggle('dark-theme', isDark);
+    });
+
+    // Fullscreen
     const btnFullscreen = document.getElementById('btn-fullscreen');
     btnFullscreen.addEventListener('click', async () => {
       try {
@@ -160,6 +215,7 @@
       setTimeout(() => map.invalidateSize(), 100);
     });
 
+    // Boot
     fetch('locations.json')
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(data => {
